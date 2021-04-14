@@ -5,6 +5,12 @@ from setuptools import setup
 FULLVERSION = '0.0.1'
 VERSION = FULLVERSION
 
+REQUIREMENTS_PATH = path.join(path.dirname(path.realpath(__file__)), "requirements.txt")
+
+if path.isfile(REQUIREMENTS_PATH):
+    with open(REQUIREMENTS_PATH) as infile:
+        INSTALL_REQUIRES = infile.read().splitlines()
+
 setup(name='xdem',
       version=FULLVERSION,
       description='',
@@ -12,8 +18,7 @@ setup(name='xdem',
       author='The GlacioHack Team',
       license='BSD-3',
       packages=['xdem'],
-      install_requires=['numpy', 'scipy', 'rasterio', 'geopandas',
-                        'pyproj', 'tqdm', 'geoutils @ https://github.com/GlacioHack/GeoUtils/tarball/master', 'scikit-gstat'],
+      install_requires=INSTALL_REQUIRES,
       extras_require={'rioxarray': ['rioxarray'], 'richdem': ['richdem'], 'pdal': [
           'pdal'], 'opencv': ['opencv'], "pytransform3d": ["pytransform3d"]},
       scripts=[],

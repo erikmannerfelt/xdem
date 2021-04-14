@@ -1,0 +1,8 @@
+numpy
+scipy
+rasterio
+geopandas
+pyproj
+tqdm
+geoutils @ https://github.com/GlacioHack/GeoUtils/tarball/master
+scikit-gstat
