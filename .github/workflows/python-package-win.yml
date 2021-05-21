@@ -22,13 +22,13 @@ jobs:
         python-version: 3.9
     - name: Install dependencies
       run: |
-        C:\Miniconda\condabin\conda.bat install -c conda-forge mamba -y
+        C:\Miniconda\condabin\conda.bat install -c conda-forge mamba make -y
         C:\Miniconda\condabin\conda.bat env update --file environment.yml --name base
         C:\Miniconda\condabin\conda.bat init powershell
         C:\Miniconda\condabin\conda.bat activate base
         pip install git+https://github.com/GlacioHack/GeoUtils.git  --no-dependencies
         pip install sphinx numpydoc sphinx_rtd_theme sphinx_autodoc_typehints sphinxcontrib-programoutput flake8
-        pip install . --no-dependencies
+        pip install -e . --no-dependencies
     - name: Lint with flake8
       run: |
         C:\Miniconda\condabin\conda.bat init powershell
