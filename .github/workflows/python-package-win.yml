@@ -27,7 +27,7 @@ jobs:
         C:\Miniconda\condabin\conda.bat init powershell
         C:\Miniconda\condabin\conda.bat activate base
         pip install git+https://github.com/GlacioHack/GeoUtils.git  --no-dependencies
-        pip install sphinx numpydoc sphinx_rtd_theme sphinx_autodoc_typehints sphinxcontrib-programoutput
+        pip install sphinx numpydoc sphinx_rtd_theme sphinx_autodoc_typehints sphinxcontrib-programoutput flake8
         pip install . --no-dependencies
     - name: Lint with flake8
       run: |
