@@ -46,9 +46,8 @@ jobs:
     - name: Set up Python ${{ matrix.python-version }} and dependencies
       uses: conda-incubator/setup-miniconda@v2
       with:
-        auto-update-conda: true
         python-version: ${{ matrix.python-version }}
-        mamba-version: "*"
+        use-mamba: true
         channels: conda-forge
         channel-priority: strict
         environment-file: dev-environment.yml
