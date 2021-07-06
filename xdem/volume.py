@@ -527,7 +527,6 @@ def get_regional_hypsometric_signal(ddem: Union[np.ndarray, np.ma.masked_array],
     :param ref_dem: A void-free reference DEM.
     :param glacier_index_map: An array glacier indices of the same shape as the previous inputs.
     :param verbose: Show progress bar.
-    n_bins = 20  # TODO: This should be an argument.
     :param n_bins: The number of elevation bins to subdivide each glacier in.
 
     :returns: A DataFrame of bin statistics, scaled by elevation and elevation change.

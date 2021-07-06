@@ -53,6 +53,7 @@ class TestDocs:
             [
                 "-j",
                 str(self.n_threads or "auto"),
+                "-W",  # Treat warnings as errors
                 os.path.join(self.docs_dir, "source/"),
                 os.path.join(self.docs_dir, "build/html"),
             ]

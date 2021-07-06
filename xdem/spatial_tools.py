@@ -442,7 +442,7 @@ def subsample_raster(
     Randomly subsample a 1D or 2D array by a subsampling factor, taking only non NaN/masked values.
 
     :param subsample: If <= 1, will be considered a fraction of valid pixels to extract.
-    If > 1 will be considered the number of pixels to extract.
+                      If > 1 will be considered the number of pixels to extract.
     :param return_indices: If set to True, will return the extracted indices only.
 
     :returns: The subsampled array (1D) or the indices to extract (same shape as input array)
