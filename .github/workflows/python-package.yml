@@ -30,7 +30,7 @@ jobs:
 
     - name: Get current date (for caching)
       id: date
-      run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+      run: echo "::set-output name=date::$(date +'%Y%m%d')"
 
     - name: Cache conda
       uses: actions/cache@v2
@@ -39,7 +39,7 @@ jobs:
       with:
         path: ~/conda_pkgs_dir
         key:
-          ${{ runner.os }}-conda-py${{ matrix.python-version }}-${{ env.CACHE_NUMBER }}-${{ steps.date.output.date }}-${{
+          ${{ runner.os }}-conda-py${{ matrix.python-version }}-${{ env.CACHE_NUMBER }}-${{ steps.date.outputs.date }}-${{
           hashFiles('dev-environment.yml') }}
 
     # Set up the conda-forge environment with mamba
