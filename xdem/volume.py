@@ -527,7 +527,6 @@ def get_regional_hypsometric_signal(ddem: Union[np.ndarray, np.ma.masked_array],
     :param ref_dem: A void-free reference DEM.
     :param glacier_index_map: An array glacier indices of the same shape as the previous inputs.
     :param verbose: Show progress bar.
-    n_bins = 20  # TODO: This should be an argument.
     :param n_bins: The number of elevation bins to subdivide each glacier in.
 
     :returns: A DataFrame of bin statistics, scaled by elevation and elevation change.
@@ -733,7 +732,7 @@ def norm_regional_hypsometric_interpolation(voided_ddem: Union[np.ndarray, np.ma
             )[0]
 
         # Create a linear model from the elevations and the scaled regional signal.
-        model = scipy.interpolate.interp1d(signal.index.mid, np.poly1d(coeffs)(signal.values), bounds_error=False)
+        model = scipy.interpolate.interp1d(signal.index.mid, np.poly1d(coeffs)(signal.values), bounds_error=False, fill_value="extrapolate")
 
         # Find which values to fill using the model (all nans within the glacier extent)
         if not idealized_ddem:
