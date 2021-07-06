@@ -33,10 +33,9 @@ jobs:
       run: echo "::set-output name=date::$(date +'%Y%m%d')$(echo $matrix.python-version | sed 's/\.//g')"
 
     - name: Cache conda
-        uses: actions/cache@v2
-        env:
-          # Increase this value to reset cache if etc/example-environment.yml has not changed
-          CACHE_NUMBER: {{ steps.date.output.date }}
+      uses: actions/cache@v2
+      env:
+        CACHE_NUMBER: {{ steps.date.output.date }}
         with:
           path: ~/conda_pkgs_dir
           key:
