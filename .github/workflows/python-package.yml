@@ -36,11 +36,11 @@ jobs:
       uses: actions/cache@v2
       env:
         CACHE_NUMBER: 0
-        with:
-          path: ~/conda_pkgs_dir
-          key:
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{
-            hashFiles('dev-environment.yml') }}
+      with:
+        path: ~/conda_pkgs_dir
+        key:
+          ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{
+          hashFiles('dev-environment.yml') }}
 
     # Set up the conda-forge environment with mamba
     - name: Set up Python ${{ matrix.python-version }} and dependencies
