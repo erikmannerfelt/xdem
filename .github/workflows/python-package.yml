@@ -30,17 +30,17 @@ jobs:
 
     - name: Get current date (for caching)
       id: date
-      run: echo "::set-output name=date::$(date +'%Y%m%d')$(echo $matrix.python-version | sed 's/\.//g')"
+      run: echo "# $(date +'%Y%m%d'){{ matrix.python-version }}" >> dev-environment.yml
 
     - name: Cache conda
       uses: actions/cache@v2
       env:
-        CACHE_NUMBER: {{ steps.date.output.date }}
+        CACHE_NUMBER: 0
         with:
           path: ~/conda_pkgs_dir
           key:
             ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{
-            hashFiles('etc/dev-environment.yml') }}
+            hashFiles('dev-environment.yml') }}
 
     # Set up the conda-forge environment with mamba
     - name: Set up Python ${{ matrix.python-version }} and dependencies
