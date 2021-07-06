@@ -51,7 +51,7 @@ jobs:
         mamba-version: "*"
         channels: conda-forge
         channel-priority: strict
-        environment-file: dev-environment-caching.yml
+        environment-file: dev-environment.yml
         activate-environment: xdem-dev
         use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly
 
