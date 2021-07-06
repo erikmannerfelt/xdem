@@ -28,6 +28,21 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: Get current date (for caching)
+      id: date
+      run: echo "::set-output name=date::$(date +'%Y%m%d')$(echo $matrix.python-version | sed 's/\.//g')"
+
+    - name: Cache conda
+        uses: actions/cache@v2
+        env:
+          # Increase this value to reset cache if etc/example-environment.yml has not changed
+          CACHE_NUMBER: {{ steps.date.output.date }}
+        with:
+          path: ~/conda_pkgs_dir
+          key:
+            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{
+            hashFiles('etc/dev-environment.yml') }}
+
     # Set up the conda-forge environment with mamba
     - name: Set up Python ${{ matrix.python-version }} and dependencies
       uses: conda-incubator/setup-miniconda@v2
@@ -39,6 +54,7 @@ jobs:
         channel-priority: strict
         environment-file: dev-environment.yml
         activate-environment: xdem-dev
+        use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly
 
     - name: Install project
       run: |
