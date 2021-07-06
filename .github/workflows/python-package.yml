@@ -25,17 +25,6 @@ jobs:
       run:
         shell: bash -l {0}
 
-    steps:
-    - uses: actions/checkout@v2
-
-    # Set up the conda-forge environment with mamba
-    - name: Set up Python ${{ matrix.python-version }} and dependencies
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        activate-environment: xdem-dev-${{ matrix.python-version }}
-        auto-activate-base: true
-        use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly
-
     - name: Get current date (for caching)
       id: date
       run: echo "::set-output name=date::$(date +'%Y%m%d')"
@@ -43,31 +32,32 @@ jobs:
     - name: Cache conda
       uses: actions/cache@v2
       env:
-        CACHE_NUMBER: 1
+        CACHE_NUMBER: 2
       with:
         path: ~/conda_pkgs_dir
         key:
           ${{ runner.os }}-conda-py${{ matrix.python-version }}-${{ env.CACHE_NUMBER }}-${{ steps.date.outputs.date }}-${{
           hashFiles('dev-environment.yml') }}
 
-    - name: Install dependencies
-      # Only need to run install when deps has been changed
-      if: steps.conda.outputs.cache-hit != 'true'
-      run: |
-        conda install -c conda-forge mamba -y
-        mamba create -n xdem-dev-${{ matrix.python-version }} python=${{ matrix.python-version }} -y
-        mamba env update -n xdem-dev-${{ matrix.python-version }} -f dev-environment.yml
-        conda activate xdem-dev-${{ matrix.python-version }}
-
+    # Set up the conda-forge environment with mamba
+    - name: Set up Python ${{ matrix.python-version }} and dependencies
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        auto-update-conda: true
+        python-version: ${{ matrix.python-version }}
+        mamba-version: "0.12.2"
+        channels: conda-forge
+        channel-priority: strict
+        environment-file: dev-environment.yml
+        activate-environment: xdem-dev
+        use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly
 
     - name: Install project
       run: |
-        conda activate xdem-dev-${{ matrix.python-version }}
         pip install --no-dependencies --editable .
 
     - name: Lint with flake8
       run: |
-        conda activate xdem-dev-${{ matrix.python-version }}
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
@@ -75,9 +65,7 @@ jobs:
       # pytest will run asynchronously, so test data need to be downloaded first.
     - name: Download example data
       run: |
-        conda activate xdem-dev-${{ matrix.python-version }}
         python -c "from xdem.examples import *; download_longyearbyen_examples(overwrite=False)"
     - name: Test with pytest
       run: |
-        conda activate xdem-dev-${{ matrix.python-version }}
         pytest -rA -n=auto
