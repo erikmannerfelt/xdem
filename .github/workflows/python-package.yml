@@ -57,6 +57,7 @@ jobs:
         conda install -c conda-forge mamba -y
         mamba create -n xdem-dev-${{ matrix.python-version }} python=${{ matrix.python-version }} -y
         mamba env update -n xdem-dev-${{ matrix.python-version }} -f dev-environment.yml
+        mamba install flake8
 
 
     - name: Install project
