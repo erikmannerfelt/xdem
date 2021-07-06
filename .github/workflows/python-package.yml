@@ -25,6 +25,8 @@ jobs:
       run:
         shell: bash -l {0}
 
+    steps:
+
     - name: Get current date (for caching)
       id: date
       run: echo "::set-output name=date::$(date +'%Y%m%d')"
