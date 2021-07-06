@@ -32,7 +32,7 @@ jobs:
     - name: Set up Python ${{ matrix.python-version }} and dependencies
       uses: conda-incubator/setup-miniconda@v2
       with:
-        activate-environment: xdem-dev
+        activate-environment: xdem-dev-${{ matrix.python-version }}
         auto-activate-base: true
         use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly
 
@@ -55,8 +55,8 @@ jobs:
       if: steps.conda.outputs.cache-hit != 'true'
       run: |
         conda install -c conda-forge mamba -y
-        mamba create -n xdem-dev python=${{ matrix.python-version }} -y
-        mamba env update -f dev-environment.yml --strict-channel-priority
+        mamba create -n xdem-dev-${{ matrix.python-version }} python=${{ matrix.python-version }} -y
+        mamba env update -n xdem-dev-${{ matrix.python-version }} -f dev-environment.yml
 
 
     - name: Install project
