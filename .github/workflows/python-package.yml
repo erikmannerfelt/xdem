@@ -26,6 +26,7 @@ jobs:
         shell: bash -l {0}
 
     steps:
+    - uses: actions/checkout@v2
 
     - name: Get current date (for caching)
       id: date
