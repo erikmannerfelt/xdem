@@ -4,9 +4,11 @@ from __future__ import annotations
 import warnings
 
 import pytest
+import time
 
 import xdem
 import xdem.misc
+import numpy as np
 
 
 @pytest.mark.parametrize("deprecation_increment", [-1, 0, 1, None])
@@ -65,3 +67,38 @@ def test_deprecate(deprecation_increment: int | None, details: str | None) -> No
     else:
         with pytest.raises(ValueError, match="^" + text + "$"):
             useless_func()
+
+@pytest.mark.parametrize("coeffs", [[100, 0], [100, 100], [2, 100, 100]])
+def test_synthesize_glacier(coeffs: list[float]):
+
+    seed = np.random.randint(0, np.iinfo(np.int32).max)
+    
+    glacier = xdem.misc.synthesize_glacier(gradient_coeffs=coeffs, cache=False, random_seed=seed)
+
+    assert glacier.max() < np.sum(np.power(coeffs, np.arange(1, len(coeffs) + 1)[::-1]))
+    assert glacier.min() > coeffs[-1]
+
+    assert (np.count_nonzero(glacier.mask) / glacier.size) > 0.4
+
+    smaller_glacier = xdem.misc.synthesize_glacier(gradient_coeffs=coeffs, cache=False, size_scale=0.7, random_seed=seed)
+
+    assert glacier.size > smaller_glacier.size
+
+    erroneous_glacier = xdem.misc.synthesize_glacier(gradient_coeffs=coeffs, error_magnitude=5, random_seed=seed)
+
+    assert glacier.std() < erroneous_glacier.std()
+
+
+def test_synthesize_glacier_cache():
+    """Test that caching is faster than no caching."""
+    n_iterations = 5
+    
+    time_before = time.time()
+    [xdem.misc.synthesize_glacier(random_seed=1, cache=False) for _ in range(n_iterations)]
+    time_no_cache = time.time()
+    [xdem.misc.synthesize_glacier(random_seed=1, cache=True) for _ in range(n_iterations)]
+    time_cache = time.time()
+
+    assert (time_cache - time_no_cache) < (time_no_cache - time_before)
+        
+

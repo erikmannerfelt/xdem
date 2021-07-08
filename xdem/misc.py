@@ -2,13 +2,24 @@
 from __future__ import annotations
 
 import functools
+import os
+import pickle
+import tempfile
 import warnings
+import hashlib
 from typing import Any, Callable
 
 import cv2
 import numpy as np
+import scipy.interpolate
+import scipy.ndimage
+import scipy.spatial
+import shapely
+import skimage.graph
 
 import xdem.version
+
+TEMP_DIR = tempfile.TemporaryDirectory()
 
 
 def generate_random_field(shape: tuple[int, int], corr_size: int) -> np.ndarray:
@@ -53,7 +64,7 @@ def deprecate(removal_version: str | None = None, details: str | None = None):
     Trigger a DeprecationWarning for the decorated function.
 
     :param func: The function to be deprecated.
-    :param removal_version: Optional. The version at which this will be removed. 
+    :param removal_version: Optional. The version at which this will be removed.
                             If this version is reached, a ValueError is raised.
     :param details: Optional. A description for why the function was deprecated.
 
@@ -63,8 +74,8 @@ def deprecate(removal_version: str | None = None, details: str | None = None):
 
     :returns: The decorator to decorate the function.
     """
-    def deprecator_func(func):
 
+    def deprecator_func(func):
         @functools.wraps(func)
         def new_func(*args, **kwargs):
             # True if it should warn, False if it should raise an error
@@ -97,9 +108,137 @@ def deprecate(removal_version: str | None = None, details: str | None = None):
                 warnings.warn(text, category=DeprecationWarning, stacklevel=2)
             else:
                 raise ValueError(text)
-            
+
             return func(*args, **kwargs)
 
         return new_func
 
     return deprecator_func
+
+
+def synthesize_glacier(
+    border: int = 1,
+    curviness: float = 1.0,
+    size_scale: float = 1.0,
+    gradient_coeffs: list[float] = [100.0, 0],
+    error_size: int = 2,
+    error_magnitude: float = 1.0,
+    random_seed: int | None = 42,
+    cache: bool = True,
+) -> np.ma.masked_array:
+    if random_seed is None:
+        random_seed = np.random.randint(0, np.iinfo(np.int32).max)
+
+    cache_name: str
+
+    if cache:
+        cache_name = os.path.join(TEMP_DIR.name, "".join(map(str, (random_seed, border, curviness, size_scale, gradient_coeffs, error_size, error_magnitude, random_seed))) + ".pkl")
+
+        if os.path.isfile(cache_name):
+            with open(cache_name, "rb") as infile:
+                return pickle.load(infile)
+
+    for i in range(10):
+        np.random.seed(random_seed + i)
+        # Generate a spatially correlated random field.
+        # Threshold the field to generate random "blobs"
+        random_blobs = generate_random_field((int(500 * size_scale), int(500 * size_scale)), corr_size=20) < 0.6
+
+        # Remove all "blobs" that intersect the border (only keep the closed ones)
+        labels = scipy.ndimage.measurements.label((~random_blobs) & scipy.ndimage.binary_fill_holes(random_blobs))[0]
+
+        u_labels, u_counts = np.unique(labels[labels != 0], return_counts=True)
+
+        mask = labels == u_labels[np.argwhere(u_counts == u_counts.max())][0][0]
+
+        # In some cases, the generated blob is huge.
+        if (np.count_nonzero(mask) / mask.size) > 0.3:
+            continue
+
+        (ymin, xmin), (ymax, xmax) = np.argwhere(mask).min(axis=0), np.argwhere(mask).max(axis=0)
+        mask = mask[ymin - border : ymax + border + 1, xmin - border : xmax + border + 1]
+
+        xcoords, ycoords = np.meshgrid(np.arange(mask.shape[1]), np.arange(mask.shape[0]))
+
+        coords = np.dstack([xcoords, ycoords])
+
+        xcoords_inside, ycoords_inside = xcoords[mask], ycoords[mask]
+        xcoords_outside, ycoords_outside = xcoords[~mask], ycoords[~mask]
+
+        distance_arr = np.zeros(mask.shape, dtype="float32")
+        distance_arr[coords[:, :, 1][mask], coords[:, :, 0][mask]] = scipy.spatial.distance.cdist(
+            coords.reshape(-1, 2)[mask.ravel()], coords.reshape(-1, 2)[~mask.ravel()]
+        ).min(axis=1)
+
+        largest_distance = np.argwhere(distance_arr == distance_arr.max())[0]
+        cost_raster = np.where(mask, 1 / (distance_arr + 0.1), 99999)
+        smaller_mask = scipy.ndimage.binary_erosion(mask, iterations=2)
+
+        longest_line = shapely.geometry.LineString()
+        route_lengths = np.empty((0,), dtype=int)
+        descending_order = np.argsort(
+            1 - np.linalg.norm(coords.reshape(-1, 2)[smaller_mask.ravel()][:, ::-1] - largest_distance, axis=1)
+        )
+        for coord in coords.reshape(-1, 2)[smaller_mask.ravel()][descending_order, ::-1]:
+            route = np.array(skimage.graph.route_through_array(cost_raster, largest_distance, coord)[0])
+
+            route_lengths = np.append(route_lengths, len(route))
+
+            # If no improvement is seen within the last 10 iterations, stop looking
+            if len(route_lengths) > 10 and route_lengths[-10:-5].max() >= route_lengths[-5:-1].max():
+                break
+
+            if len(route) > len(longest_line.coords):
+                longest_line = shapely.geometry.LineString(route[::-1, [1, 0]])
+
+        splitter = int(len(longest_line.coords) * 0.9)
+        extended_line = np.r_[
+            longest_line.coords[:splitter],
+            shapely.affinity.scale(
+                shapely.geometry.LineString(longest_line.coords[splitter:]),
+                xfact=10,
+                yfact=10,
+                origin=longest_line.coords[splitter],
+            ).coords,
+        ]
+
+        heights = (
+            scipy.ndimage.uniform_filter(
+                scipy.interpolate.griddata(
+                    points=extended_line,
+                    values=np.arange(extended_line.shape[0]),
+                    xi=(xcoords, ycoords),
+                    method="nearest",
+                ),
+                10,
+            )
+            / extended_line.shape[0]
+        )
+
+        curvature = (2 * heights - 1) * scipy.ndimage.filters.gaussian_filter(distance_arr, 3) * curviness
+
+        dem = np.ma.masked_array(np.poly1d(gradient_coeffs)(heights) - curvature, mask=~mask)
+
+        if error_magnitude > 0.0:
+            dem += (generate_random_field(dem.shape, corr_size=error_size) - 0.5) * error_magnitude * dem.std() / 10
+
+        break
+    else:
+        raise ValueError("This should not be possible. Please raise an issue")
+
+    if cache:
+        with open(cache_name, "wb") as outfile:
+            pickle.dump(dem, outfile)
+
+    return dem 
+
+if __name__ == "__main__":
+    import time
+
+    times = []
+    for _ in range(100):
+        start = time.time()
+        synthesize_glacier(random_seed=None)
+        times.append(time.time() - start)
+
+    print(np.mean(times), np.std(times))
