@@ -71,7 +71,7 @@ def test_deprecate(deprecation_increment: int | None, details: str | None) -> No
 @pytest.mark.parametrize("coeffs", [[100, 0], [100, 100], [2, 100, 100]])
 def test_synthesize_glacier(coeffs: list[float]):
 
-    seed = np.random.randint(0, np.iinfo(np.int32).max)
+    seed = 1
     
     glacier = xdem.misc.synthesize_glacier(gradient_coeffs=coeffs, cache=False, random_seed=seed)
 
@@ -80,11 +80,11 @@ def test_synthesize_glacier(coeffs: list[float]):
 
     assert (np.count_nonzero(glacier.mask) / glacier.size) > 0.4
 
-    smaller_glacier = xdem.misc.synthesize_glacier(gradient_coeffs=coeffs, cache=False, size_scale=0.7, random_seed=seed)
+    smaller_glacier = xdem.misc.synthesize_glacier(gradient_coeffs=coeffs, cache=False, size_scale=0.4, random_seed=seed)
 
     assert glacier.size > smaller_glacier.size
 
-    erroneous_glacier = xdem.misc.synthesize_glacier(gradient_coeffs=coeffs, error_magnitude=5, random_seed=seed)
+    erroneous_glacier = xdem.misc.synthesize_glacier(gradient_coeffs=coeffs, error_magnitude=50, random_seed=seed, cache=False)
 
     assert glacier.std() < erroneous_glacier.std()
 
@@ -93,12 +93,42 @@ def test_synthesize_glacier_cache():
     """Test that caching is faster than no caching."""
     n_iterations = 5
     
-    time_before = time.time()
-    [xdem.misc.synthesize_glacier(random_seed=1, cache=False) for _ in range(n_iterations)]
-    time_no_cache = time.time()
-    [xdem.misc.synthesize_glacier(random_seed=1, cache=True) for _ in range(n_iterations)]
-    time_cache = time.time()
+    times = [time.time()]
+    caching: list[bool] = []
+    for i in range(0, 15):
+        should_cache = i % 2 == 0
+        xdem.misc.synthesize_glacier(random_seed=1, cache=should_cache)
+        times.append(time.time())
+        caching.append(should_cache if i > 0 else False)
 
-    assert (time_cache - time_no_cache) < (time_no_cache - time_before)
+    durations = np.diff(times)
+
+    durations_nocache = durations[~np.asarray(caching)]
+    durations_cache = durations[np.asarray(caching)]
+
+    assert durations_nocache.min() > durations_cache.max()
+
+    dem1 = [xdem.misc.synthesize_glacier(random_seed=1, curviness=2, cache=True) for i in range(2)][-1]
+    dem2 = [xdem.misc.synthesize_glacier(random_seed=1, curviness=3, cache=True) for i in range(2)][-1]
         
 
+    assert not np.array_equal(dem1.data, dem2.data)
+
+
+def test_synthesize_glacier_region():
+
+    time_before = time.time()
+    region = xdem.misc.synthesize_glacier_region(random_seed=1, cache=True)
+    time_after = time.time()
+    xdem.misc.synthesize_glacier_region(random_seed=1, cache=True)
+    time_after_cache = time.time()
+    
+    assert (time_after - time_before) > (time_after_cache - time_after)
+    assert (time_after_cache - time_after) < 1
+
+    assert (np.count_nonzero(~region.mask) / region.size) > 0.05
+
+    import matplotlib.pyplot as plt
+
+    plt.imshow(region)
+    plt.show()

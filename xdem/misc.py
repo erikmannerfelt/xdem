@@ -1,12 +1,13 @@
 """Small functions for testing, examples, and other miscellaneous uses."""
 from __future__ import annotations
 
+import concurrent.futures
 import functools
+import hashlib
 import os
 import pickle
 import tempfile
 import warnings
-import hashlib
 from typing import Any, Callable
 
 import cv2
@@ -16,6 +17,7 @@ import scipy.ndimage
 import scipy.spatial
 import shapely
 import skimage.graph
+import skimage.transform
 
 import xdem.version
 
@@ -116,6 +118,33 @@ def deprecate(removal_version: str | None = None, details: str | None = None):
     return deprecator_func
 
 
+def cache(func):
+
+    @functools.wraps(func)
+    def inner_func(*args, **kwargs):
+
+        should_cache = kwargs.get("cache") in [True, None]
+        if "random_seed" in kwargs and kwargs["random_seed"] is None:
+            should_cache = False
+
+        if should_cache:
+            cache_name = os.path.join(TEMP_DIR.name, hashlib.md5("".join(map(lambda s: str(pickle.dumps(s)), list(args) + list(kwargs.values()))).encode()).hexdigest() + ".pkl")
+
+            if os.path.isfile(cache_name):
+                with open(cache_name, "rb") as infile:
+                    return pickle.load(infile)
+
+        result = func(*args, **kwargs)
+
+        if should_cache:
+            with open(cache_name, "wb") as outfile:
+                pickle.dump(result, outfile)
+
+        return result
+
+    return inner_func
+
+@cache
 def synthesize_glacier(
     border: int = 1,
     curviness: float = 1.0,
@@ -129,14 +158,8 @@ def synthesize_glacier(
     if random_seed is None:
         random_seed = np.random.randint(0, np.iinfo(np.int32).max)
 
-    cache_name: str
-
     if cache:
-        cache_name = os.path.join(TEMP_DIR.name, "".join(map(str, (random_seed, border, curviness, size_scale, gradient_coeffs, error_size, error_magnitude, random_seed))) + ".pkl")
-
-        if os.path.isfile(cache_name):
-            with open(cache_name, "rb") as infile:
-                return pickle.load(infile)
+        pass
 
     for i in range(10):
         np.random.seed(random_seed + i)
@@ -165,9 +188,11 @@ def synthesize_glacier(
         xcoords_inside, ycoords_inside = xcoords[mask], ycoords[mask]
         xcoords_outside, ycoords_outside = xcoords[~mask], ycoords[~mask]
 
+        larger_mask = scipy.ndimage.binary_dilation(mask, iterations=2)
+
         distance_arr = np.zeros(mask.shape, dtype="float32")
         distance_arr[coords[:, :, 1][mask], coords[:, :, 0][mask]] = scipy.spatial.distance.cdist(
-            coords.reshape(-1, 2)[mask.ravel()], coords.reshape(-1, 2)[~mask.ravel()]
+            coords.reshape(-1, 2)[mask.ravel()], coords.reshape(-1, 2)[~mask.ravel() & larger_mask.ravel()]
         ).min(axis=1)
 
         largest_distance = np.argwhere(distance_arr == distance_arr.max())[0]
@@ -226,19 +251,45 @@ def synthesize_glacier(
     else:
         raise ValueError("This should not be possible. Please raise an issue")
 
+    return dem
+
+
+@cache
+def synthesize_glacier_region(
+    shape: tuple[int, int] = (2000, 2000),
+    n_glaciers: int = 50,
+    random_seed: int | None = None,
+    cache: bool = True
+):
+
+    from xdem.spatial_tools import subdivide_array
+    if random_seed is None:
+        random_seed = np.random.randint(0, np.iinfo(np.int32).max)
+
     if cache:
-        with open(cache_name, "wb") as outfile:
-            pickle.dump(dem, outfile)
+        pass
 
-    return dem 
+    output = np.ma.masked_array(np.empty(shape=shape, dtype="float32"), mask=np.ones(shape=shape, dtype="bool"))
 
-if __name__ == "__main__":
-    import time
+    subdivision = subdivide_array(shape, n_glaciers)
 
-    times = []
-    for _ in range(100):
-        start = time.time()
-        synthesize_glacier(random_seed=None)
-        times.append(time.time() - start)
+    for i in range(n_glaciers):
 
-    print(np.mean(times), np.std(times))
+        dem = synthesize_glacier(random_seed=random_seed + i, curviness=abs(np.random.randn()), size_scale=1 + abs(np.random.randn()))
+
+        subdivided_part = subdivision == i
+        (ymin, xmin), (ymax, xmax) = np.argwhere(subdivided_part).min(axis=0), np.argwhere(subdivided_part).max(axis=0)
+
+        max_height = ymax - ymin
+        max_width = xmax - xmin
+
+        if dem.shape[0] > max_height or dem.shape[1] > max_width:
+            dem_resized = skimage.transform.resize(dem.data, output_shape=(np.clip(dem.shape[0], 1, max_height), np.clip(dem.shape[1], 1, max_width)), order=1, preserve_range=True)
+            mask_resized = skimage.transform.resize(dem.data, output_shape=(np.clip(dem.shape[0], 1, max_height), np.clip(dem.shape[1], 1, max_width)), order=0, preserve_range=True)
+
+            dem = np.ma.masked_array(dem_resized, mask=mask_resized.astype(bool))
+
+        output[ymin: ymin + dem.shape[0], xmin: xmin + dem.shape[1]] = dem
+
+    return output
+
